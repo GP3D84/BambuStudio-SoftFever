@@ -61,11 +61,9 @@ std::string GCodeWriter::preamble()
         FLAVOR_IS(gcfSmoothie) ||
         FLAVOR_IS(gcfKlipper))
     {
-        if (RELATIVE_E_AXIS) {
-            gcode << "M83 ; only support relative e\n";
+        if (this->config.use_relative_e_distances) {
+            gcode << "M83 ; use relative distances for extrusion\n";
         } else {
-            //BBS: don't support absolute e distance
-            assert(0);
             gcode << "M82 ; use absolute distances for extrusion\n";
         }
         gcode << this->reset_e(true);
@@ -176,10 +174,15 @@ std::string GCodeWriter::set_acceleration(unsigned int acceleration)
         // This is new MarlinFirmware with separated print/retraction/travel acceleration.
         // Use M204 P, we don't want to override travel acc by M204 S (which is deprecated anyway).
         gcode << "M204 P" << acceleration;
-    } else {
-        // M204: Set default acceleration
+    } else if (FLAVOR_IS(gcfKlipper) && this->config.accel_to_decel_enable) {
+        gcode << "SET_VELOCITY_LIMIT ACCEL_TO_DECEL=" << acceleration * this->config.accel_to_decel_factor / 100;
+        if (GCodeWriter::full_gcode_comment)
+            gcode << " ; adjust max_accel_to_decel to chosen % of new accel value\n";
         gcode << "M204 S" << acceleration;
-    }
+        // Set max accel to decel to half of acceleration
+    } else
+        gcode << "M204 S" << acceleration;
+    
     //BBS
     if (GCodeWriter::full_gcode_comment) gcode << " ; adjust acceleration";
     gcode << "\n";
@@ -246,7 +249,7 @@ std::string GCodeWriter::reset_e(bool force)
         m_extruder->reset_E();
     }
 
-    if (! RELATIVE_E_AXIS) {
+    if (! this->config.use_relative_e_distances) {
         std::ostringstream gcode;
         gcode << "G92 E0";
         //BBS
@@ -301,11 +304,12 @@ std::string GCodeWriter::toolchange(unsigned int extruder_id)
     return gcode.str();
 }
 
-std::string GCodeWriter::set_speed(double F, const std::string &comment, const std::string &cooling_marker) const
+std::string GCodeWriter::set_speed(double F, const std::string &comment, const std::string &cooling_marker)
 {
     assert(F > 0.);
     assert(F < 100000.);
-
+    
+    m_current_speed = F;
     GCodeG1Formatter w;
     w.emit_f(F);
     //BBS
@@ -503,6 +507,9 @@ std::string GCodeWriter::extrude_to_xy(const Vec2d &point, double dE, const std:
 {
     m_pos(0) = point(0);
     m_pos(1) = point(1);
+    if(std::abs(dE) <= std::numeric_limits<double>::epsilon())
+        force_no_extrusion = true;
+    
     if (!force_no_extrusion)
         m_extruder->extrude(dE);
 

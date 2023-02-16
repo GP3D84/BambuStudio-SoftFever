@@ -90,7 +90,7 @@ std::map<std::string, std::vector<SimpleSettingData>>  SettingsFactory::OBJECT_C
 
 std::map<std::string, std::vector<SimpleSettingData>>  SettingsFactory::PART_CATEGORY_SETTINGS=
 {
-    { L("Quality"), {{"ironing_type", "",8},{"ironing_flow", "",9},{"ironing_spacing", "",10},{"bridge_flow", "",11}
+    { L("Quality"), {{"ironing_type", "",8},{"ironing_flow", "",9},{"ironing_spacing", "",10},{"bridge_flow", "",11},{"bridge_density", "", 1}
                     }},
     { L("Strength"), {{"wall_loops", "",1},{"top_shell_layers", L("Top Solid Layers"),1},{"top_shell_thickness", L("Top Minimum Shell Thickness"),1},
                     {"bottom_shell_layers", L("Bottom Solid Layers"),1}, {"bottom_shell_thickness", L("Bottom Minimum Shell Thickness"),1},
@@ -305,7 +305,7 @@ static ObjectDataViewModel* list_model()
 
 static const Selection& get_selection()
 {
-    return plater()->canvas3D()->get_selection();
+    return plater()->get_current_canvas3D(true)->get_selection();
 }
 
 //				  category ->		vector 			 ( option	;  label )
@@ -747,7 +747,7 @@ void MenuFactory::append_menu_items_flush_options(wxMenu* menu)
 
     DynamicPrintConfig& global_config = wxGetApp().preset_bundle->prints.get_edited_preset().config;
     ModelConfig& select_object_config = object_list->object(selection.get_object_idx())->config;
-    
+
     auto keys = select_object_config.keys();
     for (auto key : FREQ_SETTINGS_BUNDLE_FFF["Flush options"]) {
         if (find(keys.begin(), keys.end(), key) == keys.end()) {

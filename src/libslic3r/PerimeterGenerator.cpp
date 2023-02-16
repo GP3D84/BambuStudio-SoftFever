@@ -270,14 +270,15 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
             // get non 100% overhang paths by intersecting this loop with the grown lower slices
             Polylines remain_polines;
 
-            if (perimeter_generator.config->enable_overhang_speed) {
+            //BBS: don't calculate overhang degree when enable fuzzy skin. It's unmeaning
+            if (perimeter_generator.config->enable_overhang_speed && perimeter_generator.config->fuzzy_skin == FuzzySkinType::None) {
                 for (auto it = lower_polygons_series->begin();
                     it != lower_polygons_series->end(); it++)
                 {
 
                     Polylines inside_polines = (it == lower_polygons_series->begin()) ?
                         intersection_pl({ polygon }, it->second) :
-                        intersection_pl_2(remain_polines, it->second);
+                        intersection_pl(remain_polines, it->second);
                     extrusion_paths_append(
                         paths,
                         std::move(inside_polines),
@@ -290,7 +291,7 @@ static ExtrusionEntityCollection traverse_loops(const PerimeterGenerator &perime
 
                     remain_polines = (it == lower_polygons_series->begin()) ?
                         diff_pl({ polygon }, it->second) :
-                        diff_pl_2(remain_polines, it->second);
+                        diff_pl(remain_polines, it->second);
 
                     if (remain_polines.size() == 0)
                         break;
@@ -635,7 +636,11 @@ void PerimeterGenerator::process_classic()
     m_ext_mm3_per_mm           		= this->ext_perimeter_flow.mm3_per_mm();
     coord_t ext_perimeter_width     = this->ext_perimeter_flow.scaled_width();
     coord_t ext_perimeter_spacing   = this->ext_perimeter_flow.scaled_spacing();
-    coord_t ext_perimeter_spacing2  = scaled<coord_t>(0.5f * (this->ext_perimeter_flow.spacing() + this->perimeter_flow.spacing()));
+    coord_t ext_perimeter_spacing2;
+    if(config->precise_outer_wall)
+        ext_perimeter_spacing2 = scaled<coord_t>(0.5f * (this->ext_perimeter_flow.width() + this->perimeter_flow.width()));
+    else
+        ext_perimeter_spacing2 = scaled<coord_t>(0.5f * (this->ext_perimeter_flow.spacing() + this->perimeter_flow.spacing()));
     
     // overhang perimeters
     m_mm3_per_mm_overhang      		= this->overhang_flow.mm3_per_mm();
@@ -953,16 +958,16 @@ void PerimeterGenerator::process_classic()
             // we continue inwards after having finished the brim
             // TODO: add test for perimeter order
             bool is_outer_wall_first =
-                this->print_config->wall_infill_order == WallInfillOrder::OuterInnerInfill ||
-                this->print_config->wall_infill_order == WallInfillOrder::InfillOuterInner || 
-                this->print_config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill;
+                this->config->wall_infill_order == WallInfillOrder::OuterInnerInfill ||
+                this->config->wall_infill_order == WallInfillOrder::InfillOuterInner || 
+                this->config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill;
             if (is_outer_wall_first ||
                 //BBS: always print outer wall first when there indeed has brim.
                 (this->layer_id == 0 &&
                     this->object_config->brim_type == BrimType::btOuterOnly &&
                     this->object_config->brim_width.value > 0))
             {
-                if (this->print_config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill) {
+                if (this->config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill) {
                     if (entities.entities.size() > 1) {
                         std::vector<int> extPs;
                         for (int i = 0; i < entities.entities.size(); ++i) {
@@ -1015,14 +1020,11 @@ void PerimeterGenerator::process_classic()
                 ++ irun;
             }
 #endif
-            // SoftFever: don't filter out tiny gap fills for first and top layer. So that the print looks better :)
-            if (this->layer_id != 0 && this->upper_slices != nullptr)
-            {
-                polylines.erase(std::remove_if(polylines.begin(), polylines.end(),
-                    [&](const ThickPolyline& p) {
-                        return p.length() < scale_(config->filter_out_gap_fill.value);
-                    }), polylines.end());
-            }
+            // SoftFever: filter out tiny gap fills
+            polylines.erase(std::remove_if(polylines.begin(), polylines.end(),
+                [&](const ThickPolyline& p) {
+                    return p.length() < scale_(config->filter_out_gap_fill.value);
+                }), polylines.end());
 
 
             if (! polylines.empty()) {
@@ -1182,8 +1184,8 @@ void PerimeterGenerator::process_arachne()
         int direction = -1;
 
         bool is_outer_wall_first =
-            this->print_config->wall_infill_order == WallInfillOrder::OuterInnerInfill ||
-            this->print_config->wall_infill_order == WallInfillOrder::InfillOuterInner;
+            this->config->wall_infill_order == WallInfillOrder::OuterInnerInfill ||
+            this->config->wall_infill_order == WallInfillOrder::InfillOuterInner;
         if (is_outer_wall_first) {
             start_perimeter = 0;
             end_perimeter = int(perimeters.size());
@@ -1311,7 +1313,7 @@ void PerimeterGenerator::process_arachne()
         }
 
         
-        if (this->print_config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill) {
+        if (this->config->wall_infill_order == WallInfillOrder::InnerOuterInnerInfill) {
             if (ordered_extrusions.size() > 1) {
                 std::vector<int> extPs;
                 for (int i = 0; i < ordered_extrusions.size(); ++i) {

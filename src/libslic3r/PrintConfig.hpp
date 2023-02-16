@@ -155,13 +155,13 @@ enum SLAPillarConnectionMode {
 enum BrimType {
     btAutoBrim,  // BBS
     btOuterOnly,
-    btNoBrim,
     btInnerOnly,
     btOuterAndInner,
+    btNoBrim,
 };
 
-enum TimelapseType {
-    tlTraditional,
+enum TimelapseType : int {
+    tlTraditional = 0,
     tlSmooth
 };
 
@@ -701,6 +701,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloat,                bridge_angle))
     ((ConfigOptionFloat,                bridge_flow))
     ((ConfigOptionFloat,                bridge_speed))
+    ((ConfigOptionPercent,              bridge_density))
     ((ConfigOptionBool,                 ensure_vertical_shell_thickness))
     ((ConfigOptionEnum<InfillPattern>,  top_surface_pattern))
     ((ConfigOptionFloat,                top_solid_infill_flow_ratio))
@@ -756,6 +757,15 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                 only_one_wall_first_layer))
     //SoftFever
     ((ConfigOptionFloat,                print_flow_ratio))
+    ((ConfigOptionFloatOrPercent,       seam_gap))
+    ((ConfigOptionBool,                 role_based_wipe_speed))
+    ((ConfigOptionFloatOrPercent,       wipe_speed))
+    ((ConfigOptionBool,                 wipe_on_loops))
+    ((ConfigOptionEnum<WallInfillOrder>, wall_infill_order))
+    ((ConfigOptionBool,                 precise_outer_wall))
+
+
+
 )
 
 PRINT_CONFIG_CLASS_DEFINE(
@@ -829,7 +839,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionFloats,              retraction_length))
     ((ConfigOptionFloats,              retract_length_toolchange))
     ((ConfigOptionFloats,              z_hop))
-    ((ConfigOptionEnum<LiftType>,     z_lift_type))
+    ((ConfigOptionEnum<LiftType>,      z_lift_type))
     ((ConfigOptionFloats,              retract_restart_extra))
     ((ConfigOptionFloats,              retract_restart_extra_toolchange))
     ((ConfigOptionFloats,              retraction_speed))
@@ -849,7 +859,9 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                auxiliary_fan))
     // SoftFever
     ((ConfigOptionBool,                use_firmware_retraction))
-
+    ((ConfigOptionBool,                use_relative_e_distances))
+    ((ConfigOptionBool,                accel_to_decel_enable))
+    ((ConfigOptionPercent,             accel_to_decel_factor))
 )
 
 // This object is mapped to Perl as Slic3r::Config::Print.
@@ -902,6 +914,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionFloat,              default_jerk))
     ((ConfigOptionFloat,              outer_wall_jerk))
     ((ConfigOptionFloat,              inner_wall_jerk))
+    ((ConfigOptionFloat,              infill_jerk))
     ((ConfigOptionFloat,              top_surface_jerk))
     ((ConfigOptionFloat,              initial_layer_jerk))
     ((ConfigOptionFloat,              travel_jerk))
@@ -910,7 +923,6 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionFloat,              initial_layer_infill_speed))
     ((ConfigOptionInts,               nozzle_temperature_initial_layer))
     ((ConfigOptionInts,               full_fan_speed_layer))
-    ((ConfigOptionEnum<WallInfillOrder>,wall_infill_order))
     ((ConfigOptionInts,               fan_max_speed))
     ((ConfigOptionFloats,             max_layer_height))
     ((ConfigOptionInts,               fan_min_speed))
@@ -921,6 +933,7 @@ PRINT_CONFIG_CLASS_DERIVED_DEFINE(
     ((ConfigOptionBool,               reduce_infill_retraction))
     ((ConfigOptionBool,               ooze_prevention))
     ((ConfigOptionString,             filename_format))
+    ((ConfigOptionStrings,            post_process))
     ((ConfigOptionString,             printer_model))
     ((ConfigOptionFloat,              resolution))
     ((ConfigOptionFloats,             retraction_minimum_travel))
