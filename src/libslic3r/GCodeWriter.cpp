@@ -28,6 +28,8 @@ void GCodeWriter::apply_print_config(const PrintConfig &print_config)
                      print_config.gcode_flavor.value == gcfRepRapFirmware;
     m_max_acceleration = std::lrint(use_mach_limits ? print_config.machine_max_acceleration_extruding.values.front() : 0);
     m_max_jerk = std::lrint(use_mach_limits ? std::min(print_config.machine_max_jerk_x.values.front(), print_config.machine_max_jerk_y.values.front()) : 0);
+    m_max_jerk_z = print_config.machine_max_jerk_z.values.front();
+    m_max_jerk_e = print_config.machine_max_jerk_e.values.front();
 }
 
 void GCodeWriter::set_extruders(std::vector<unsigned int> extruder_ids)
@@ -190,13 +192,13 @@ std::string GCodeWriter::set_acceleration(unsigned int acceleration)
     return gcode.str();
 }
 
-std::string GCodeWriter::set_jerk_xy(unsigned int jerk)
+std::string GCodeWriter::set_jerk_xy(double jerk)
 {
     // Clamp the jerk to the allowed maximum.
     if (m_max_jerk > 0 && jerk > m_max_jerk)
         jerk = m_max_jerk;
 
-    if (jerk < 1 || jerk == m_last_jerk)
+    if (jerk < 0.01 || is_approx(jerk, m_last_jerk))
         return std::string();
     
     m_last_jerk = jerk;
@@ -206,7 +208,10 @@ std::string GCodeWriter::set_jerk_xy(unsigned int jerk)
         gcode << "SET_VELOCITY_LIMIT SQUARE_CORNER_VELOCITY=" << jerk;
     else
         gcode << "M205 X" << jerk << " Y" << jerk;
-        
+      
+    if (m_is_bbl_printers)
+        gcode << std::setprecision(2) << " Z" << m_max_jerk_z << " E" << m_max_jerk_e;
+
     if (GCodeWriter::full_gcode_comment) gcode << " ; adjust jerk";
     gcode << "\n";
 
@@ -393,14 +398,26 @@ std::string GCodeWriter::travel_to_xyz(const Vec3d &point, const std::string &co
                 slop_move = w0.string();
             }
         }
+
+        std::string xy_z_move;
+        {
+            GCodeG1Formatter w0;
+            if (this->is_current_position_clear()) {
+                w0.emit_xyz(target);
+                w0.emit_f(this->config.travel_speed.value * 60.0);
+                w0.emit_comment(GCodeWriter::full_gcode_comment, comment);
+                xy_z_move = w0.string();
+            }
+            else {
+                w0.emit_xy(Vec2d(target.x(), target.y()));
+                w0.emit_f(this->config.travel_speed.value * 60.0);
+                w0.emit_comment(GCodeWriter::full_gcode_comment, comment);
+                xy_z_move = w0.string() + _travel_to_z(target.z(), comment);
+            }
+        }
         m_pos = dest_point;
         this->set_current_position_clear(true);
-        GCodeG1Formatter w1;
-        w1.emit_xyz(target);
-        w1.emit_f(this->config.travel_speed.value * 60.0);
-        //BBS
-        w1.emit_comment(GCodeWriter::full_gcode_comment, comment);
-        return slop_move + w1.string();
+        return slop_move + xy_z_move;
     }
     else if (!this->will_move_z(point(2))) {
         double nominal_z = m_pos(2) - m_lifted;
